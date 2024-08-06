@@ -1,10 +1,26 @@
 use volatile::Volatile;
 use core::fmt;
+use lazy_static::lazy_static;
+use spin::Mutex;
+
+const BUFFER_HEIGHT: usize = 25;
+const BUFFER_WIDTH: usize = 80;
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Colour {
+pub enum Paint {
     Black = 0,
     Blue = 1,
     Green = 2,
@@ -25,45 +41,54 @@ pub enum Colour {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-struct ColourCode(u8);
+struct Colour(u8);
 
-impl ColourCode {
-    fn new(foreground: Colour, background: Colour) -> ColourCode {
-        ColourCode((background as u8) << 4 | (foreground as u8))
+impl Colour {
+    fn new(foreground: Paint, background: Paint) -> Colour {
+        Colour((background as u8) << 4 | (foreground as u8))
+    }
+
+    fn set_background(&mut self, foreground: Paint){
+        let mut colour: u8 = self.0;
+        colour = colour & 0x0F;
+        self.0 = colour | ((foreground as u8) << 4)
+    }
+
+    fn set_foreground(&mut self, background: Paint){
+        let mut colour: u8 = self.0;
+        colour = colour & 0xF0;
+        self.0 = colour | (background as u8)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-struct ScreenChar {
-    ascii_character: u8,
-    colour_code: ColourCode
+struct TerminalChar {
+    character: u8,
+    colour: Colour
 }
-
-const BUFFER_HEIGHT: usize = 25;
-const BUFFER_WIDTH: usize = 80;
 
 #[repr(transparent)]
 struct Buffer {
-    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT]
+    chars: [[Volatile<TerminalChar>; BUFFER_WIDTH]; BUFFER_HEIGHT]
 }
 
 pub struct Writer {
     row: usize,
     column: usize,
-    colour: ColourCode,
+    colour: Colour,
     buffer: &'static mut Buffer
 }
 
 impl Writer {
-pub fn write_string(&mut self, s: &str){
-    for byte in s.bytes() {
-        match byte {
-            0x20..=0x7e | b'\n' => self.write_byte(byte),
-            _ => self.write_byte(0xfe)
+    pub fn write_string(&mut self, s: &str){
+        for byte in s.bytes() {
+            match byte {
+                0x20..=0x7e | b'\n' => self.write_byte(byte),
+                _ => self.write_byte(0xfe)
+            }
         }
     }
-}
 
     pub fn write_byte(&mut self, byte: u8){
         match byte {
@@ -73,14 +98,29 @@ pub fn write_string(&mut self, s: &str){
                     self.new_line();
                 }
                 
-                self.buffer.chars[self.row][self.column].write(ScreenChar {
-                    ascii_character: byte,
-                    colour_code: self.colour
+                self.buffer.chars[self.row][self.column].write(TerminalChar {
+                    character: byte,
+                    colour: self.colour
                 });
 
                 self.column += 1;
             }
         }
+    }
+
+    pub fn set_colour(&mut self, foreground: Paint, background: Paint) -> &mut Writer {
+        self.colour = Colour::new(foreground, background);
+        return self;
+    }
+
+    pub fn set_foreground(&mut self, foreground: Paint) -> &mut Writer{
+        self.colour.set_foreground(foreground);
+        return self;
+    }
+
+    pub fn set_background(&mut self, background: Paint) -> &mut Writer{
+        self.colour.set_background(background);
+        return self;
     }
 
     fn new_line(&mut self){
@@ -102,9 +142,9 @@ pub fn write_string(&mut self, s: &str){
     }
 
     fn clear_row(&mut self, row: usize){
-        let blank = ScreenChar {
-            ascii_character: b' ',
-            colour_code: self.colour
+        let blank = TerminalChar {
+            character: b' ',
+            colour: self.colour
         };
 
         for col in 0..BUFFER_WIDTH{
@@ -120,15 +160,11 @@ impl fmt::Write for Writer {
     }
 }
 
-
-use lazy_static::lazy_static;
-use spin::Mutex;
-
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column: 0,
         row: 0,
-        colour: ColourCode::new(Colour::Green, Colour::Black),
+        colour: Colour::new(Paint::Green, Paint::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
     });
 }
@@ -137,15 +173,4 @@ lazy_static! {
 pub fn _print(args: fmt::Arguments){
     use core::fmt::Write;
     WRITER.lock().write_fmt(args).unwrap();
-}
-
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
