@@ -1,7 +1,9 @@
+use volatile::Volatile;
+use core::fmt;
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-
 pub enum Colour {
     Black = 0,
     Blue = 1,
@@ -43,7 +45,7 @@ const BUFFER_WIDTH: usize = 80;
 
 #[repr(transparent)]
 struct Buffer {
-    chars: [[ScreenChar; BUFFER_WIDTH]; BUFFER_HEIGHT]
+    chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT]
 }
 
 pub struct Writer {
@@ -73,10 +75,10 @@ pub fn write_string(&mut self, s: &str){
                 let row = BUFFER_HEIGHT - 1;
                 let col = self.position;
                 
-                self.buffer.chars[row][col] = ScreenChar {
+                self.buffer.chars[row][col].write(ScreenChar {
                     ascii_character: byte,
                     colour_code: self.colour
-                };
+                });
 
                 self.position += 1;
             }
@@ -84,12 +86,39 @@ pub fn write_string(&mut self, s: &str){
     }
 
     fn new_line(&mut self){
-        //TODO
+        for row in 1..BUFFER_HEIGHT{
+            for col in 0..BUFFER_WIDTH{
+                let char = self.buffer.chars[row][col].read();
+                self.buffer.chars[row - 1][col].write(char);
+            }
+        }
+
+        self.clear_row(BUFFER_HEIGHT - 1);
+        self.position = 0;
+    }
+
+    fn clear_row(&mut self, row: usize){
+        let blank = ScreenChar {
+            ascii_character: b' ',
+            colour_code: self.colour
+        };
+
+        for col in 0..BUFFER_WIDTH{
+            self.buffer.chars[row][col].write(blank)
+        }
+    }
+}
+
+impl fmt::Write for Writer {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.write_string(s);
+        Ok(())
     }
 }
 
 
 pub fn print_something() {
+    use core::fmt::Write;
     let mut writer = Writer {
         position: 0,
         colour: ColourCode::new(Colour::Yellow, Colour::Black),
@@ -97,6 +126,6 @@ pub fn print_something() {
     };
 
     writer.write_byte(b'H');
-    writer.write_string("ello ");
-    writer.write_string("Wörld!");
+    writer.write_string("ello!\n");
+    write!(writer, "The numbers are {} and {}", 42, 1.0/3.0).unwrap();
 }
