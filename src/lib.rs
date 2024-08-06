@@ -4,47 +4,13 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-mod values;
-mod serial;
-pub mod vga_buffer;
-
 use core::panic::PanicInfo;
+
 use values::QemuExitCode;
 
-pub fn exit_qemu(exit_code: QemuExitCode) {
-    use x86_64::instructions::port::Port;
-
-    unsafe {
-        let mut port = Port::new(0xf4);
-        port.write(exit_code as u32);
-    }
-}
-
-macro_rules! dbg {
-    ($fmt:expr) => {
-        serial_print!($fmt);
-        print!($fmt);
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        serial_print!($fmt, $($arg)*);
-        print!($fmt, $($arg)*);
-    };
-}
-
-macro_rules! dbgln {
-    () => {
-        serial_println!("\n");
-        println!("\n");
-    };
-    ($fmt:expr) => {
-        serial_println!($fmt);
-        println!($fmt);
-    };
-    ($fmt:expr, $($arg:tt)*) => {
-        serial_println!($fmt, $($arg)*);
-        println!($fmt, $($arg)*);
-    };
-}
+pub mod serial;
+pub mod vga_buffer;
+pub mod values;
 
 pub trait Testable {
     fn run(&self) -> ();
@@ -55,9 +21,9 @@ where
     T: Fn(),
 {
     fn run(&self) {
-        dbgln!("{}...\t", core::any::type_name::<T>());
+        serial_print!("{}...\t", core::any::type_name::<T>());
         self();
-        dbgln!("[ok]");
+        serial_println!("[ok]");
     }
 }
 
@@ -76,6 +42,16 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
     loop {}
 }
 
+pub fn exit_qemu(exit_code: QemuExitCode) {
+    use x86_64::instructions::port::Port;
+
+    unsafe {
+        let mut port = Port::new(0xf4);
+        port.write(exit_code as u32);
+    }
+}
+
+/// Entry point for `cargo xtest`
 #[cfg(test)]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
