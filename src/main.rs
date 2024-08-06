@@ -5,6 +5,7 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+#[cfg(test)]
 macro_rules! dbg {
     ($fmt:expr) => {
         serial_print!($fmt);
@@ -16,6 +17,7 @@ macro_rules! dbg {
     };
 }
 
+#[cfg(test)]
 macro_rules! dbgln {
     () => {
         serial_println!("\n");
