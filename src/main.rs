@@ -5,7 +5,13 @@
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-#[cfg(test)]
+mod vga_buffer;
+mod values;
+mod serial;
+
+use core::panic::PanicInfo;
+use values::QemuExitCode;
+
 macro_rules! dbg {
     ($fmt:expr) => {
         serial_print!($fmt);
@@ -17,7 +23,6 @@ macro_rules! dbg {
     };
 }
 
-#[cfg(test)]
 macro_rules! dbgln {
     () => {
         serial_println!("\n");
@@ -32,13 +37,6 @@ macro_rules! dbgln {
         println!($fmt, $($arg)*);
     };
 }
-
-mod vga_buffer;
-mod values;
-mod serial;
-
-use core::panic::PanicInfo;
-use values::QemuExitCode;
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -76,7 +74,7 @@ pub extern  "C" fn _start() -> ! {
 }
 
 #[cfg(test)]
-pub fn test_runner(tests: &[&dyn Fn()]) {
+pub fn test_runner(tests: &[&dyn Testable]) {
     use values::Paint;
     use vga_buffer::set_terminal_colour;
 
@@ -84,15 +82,27 @@ pub fn test_runner(tests: &[&dyn Fn()]) {
     dbgln!("Running {} tests", tests.len());
     
     for test in tests {
-        test();
+        test.run();
     }
 
     exit_qemu(QemuExitCode::Success);
 }
 
+pub trait Testable {
+    fn run(&self) -> ();
+}
+
+impl<T> Testable for T
+where T: Fn(),
+{
+    fn run(&self) {
+        dbg!("{}...\t", core::any::type_name::<T>());
+        self();
+        dbgln!("[ok]");
+    }
+}
+
 #[test_case]
 fn trivial_assertion() {
-    dbg!("Trivial assertion... ");
-    assert_eq!(0, 1);
-    dbgln!("[ok]");
+    assert_eq!(1, 1);
 }
