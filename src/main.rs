@@ -96,13 +96,8 @@ impl<T> Testable for T
 where T: Fn(),
 {
     fn run(&self) {
-        dbg!("{}...\t", core::any::type_name::<T>());
+        dbgln!("{}...\t", core::any::type_name::<T>());
         self();
         dbgln!("[ok]");
     }
-}
-
-#[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
 }
