@@ -69,7 +69,8 @@ pub struct Writer {
     row: usize,
     column: usize,
     colour: Colour,
-    buffer: &'static mut Buffer
+    buffer: &'static mut Buffer,
+    is_line_initialised: bool
 }
 
 impl Writer {
@@ -83,6 +84,11 @@ impl Writer {
     }
 
     pub fn write_byte(&mut self, byte: u8){
+        if !self.is_line_initialised {
+            self.update_row_colour();
+            self.is_line_initialised = true;
+        }
+
         match byte {
             b'\n' => self.new_line(),
             byte => {
@@ -120,9 +126,11 @@ impl Writer {
 
     fn new_line(&mut self){
         self.column = 0;
+        self.is_line_initialised = false;
 
         if self.row + 1 < BUFFER_HEIGHT {
             self.row += 1;
+            self.clear_row(self.row);
             return;
         }
 
@@ -139,7 +147,7 @@ impl Writer {
     fn clear_row(&mut self, row: usize){
         let blank = TerminalChar {
             character: b' ',
-            colour: self.colour
+            colour: Colour::new(Paint::White, Paint::Black)
         };
 
         for col in 0..BUFFER_WIDTH{
@@ -169,6 +177,7 @@ lazy_static! {
         row: 0,
         colour: Colour::new(Paint::Green, Paint::Black),
         buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+        is_line_initialised: false
     });
 }
 
