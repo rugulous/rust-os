@@ -1,13 +1,15 @@
 #![no_std]
 #![no_main]
 
+#![feature(custom_test_frameworks)]
+#![test_runner(crate::test_runner)]
+#![reexport_test_harness_main = "test_main"]
+
 mod vga_buffer;
 mod values;
 
 use core::panic::PanicInfo;
-
-use vga_buffer::{set_terminal_bg, set_terminal_colour, set_terminal_fg};
-use crate::values::Paint;
+use values::QemuExitCode;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
@@ -15,29 +17,44 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
+pub fn exit_qemu(exit_code: QemuExitCode) {
+    use x86_64::instructions::port::Port;
+
+    unsafe {
+        let mut port = Port::new(0xf4);
+        port.write(exit_code as u32);
+    }
+}
+
 #[no_mangle]
 pub extern  "C" fn _start() -> ! {
-    let colours = [Paint::Black, Paint:: Blue, Paint::Brown, Paint::Green, Paint::White];
+    println!("Hello world!");
 
-    for foreground in colours{
-        set_terminal_fg(foreground as Paint);
+    #[cfg(test)]
 
-        for background in colours{
-            set_terminal_bg(background as Paint);
-
-            println!("Testing colour {}, {}", (foreground as u8), (background as u8));
-        }
-    }
-
-    set_terminal_colour(Paint::Green, Paint::Black);
-    println!("Green text!");
-
-    set_terminal_fg(Paint::White);
-    set_terminal_bg(Paint::Brown);
-    println!("poopy bum bum");
-
-    set_terminal_colour(Paint::LightBlue, Paint::White);
-    println!("Different colours?");
+    test_main();
 
     loop {}
+}
+
+#[cfg(test)]
+pub fn test_runner(tests: &[&dyn Fn()]) {
+    use values::Paint;
+    use vga_buffer::set_terminal_colour;
+
+    set_terminal_colour(Paint::Black, Paint::White);
+    println!("Running {} tests", tests.len());
+    
+    for test in tests {
+        test();
+    }
+
+    exit_qemu(QemuExitCode::Success);
+}
+
+#[test_case]
+fn trivial_assertion() {
+    print!("Trivial assertion... ");
+    assert_eq!(1, 1);
+    println!("[ok]");
 }
