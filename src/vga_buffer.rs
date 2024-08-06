@@ -3,6 +3,8 @@ use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+use crate::values::Paint;
+
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 
@@ -17,26 +19,16 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Paint {
-    Black = 0,
-    Blue = 1,
-    Green = 2,
-    Cyan = 3,
-    Red = 4,
-    Magenta = 5,
-    Brown = 6,
-    LightGray = 7,
-    DarkGray = 8,
-    LightBlue = 9,
-    LightGreen = 10,
-    LightCyan = 11,
-    LightRed = 12,
-    Pink = 13,
-    Yellow = 14,
-    White = 15
+pub fn set_terminal_colour(foreground: Paint, background: Paint) {
+    WRITER.lock().set_colour(foreground, background);
+}
+
+pub fn set_terminal_fg(foreground: Paint){
+    WRITER.lock().set_foreground(foreground);
+}
+
+pub fn set_terminal_bg(background: Paint){
+    WRITER.lock().set_background(background);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,16 +102,19 @@ impl Writer {
 
     pub fn set_colour(&mut self, foreground: Paint, background: Paint) -> &mut Writer {
         self.colour = Colour::new(foreground, background);
+        self.update_row_colour();
         return self;
     }
 
     pub fn set_foreground(&mut self, foreground: Paint) -> &mut Writer{
         self.colour.set_foreground(foreground);
+        self.update_row_colour();
         return self;
     }
 
     pub fn set_background(&mut self, background: Paint) -> &mut Writer{
         self.colour.set_background(background);
+        self.update_row_colour();
         return self;
     }
 
@@ -149,6 +144,14 @@ impl Writer {
 
         for col in 0..BUFFER_WIDTH{
             self.buffer.chars[row][col].write(blank)
+        }
+    }
+
+    fn update_row_colour(&mut self){
+        for col in 0..BUFFER_WIDTH {
+            let mut char = self.buffer.chars[self.row][col].read();
+            char.colour = self.colour;
+            self.buffer.chars[self.row][col].write(char);
         }
     }
 }
