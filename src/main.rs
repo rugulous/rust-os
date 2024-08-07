@@ -4,17 +4,24 @@
 #![test_runner(os::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-mod vga_buffer;
-mod values;
-
 use core::panic::PanicInfo;
+
+use os::values::Paint;
+use os::vga_buffer::set_terminal_colour;
+use os::println;
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    println!("Hello World{}", "!");
+    println!("Hello World!");
+
+    os::init();
+    x86_64::instructions::interrupts::int3();
 
     #[cfg(test)]
     test_main();
+
+    set_terminal_colour(Paint::White, Paint::Green);
+    println!("We made it!");
 
     loop {}
 }
