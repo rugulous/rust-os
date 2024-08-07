@@ -1,5 +1,5 @@
 use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame};
-use crate::{gdt, println};
+use crate::{gdt, println_w_colour, values::Paint};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -20,7 +20,7 @@ pub fn init_idt(){
 }
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: InterruptStackFrame) {
-    println!("BREAKPOINT HIT\n{:#?}", stack_frame);
+    println_w_colour!(Paint::White, Paint::LightBlue, "BREAKPOINT HIT\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn double_fault_handler(stack_frame: InterruptStackFrame, _: u64) -> ! {

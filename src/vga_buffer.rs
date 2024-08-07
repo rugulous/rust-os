@@ -1,5 +1,5 @@
 use volatile::Volatile;
-use core::fmt;
+use core::fmt::{self, Write};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
@@ -17,6 +17,16 @@ macro_rules! print {
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! print_w_colour {
+    ($fg: expr, $bg: expr, $($arg:tt)*) => ($crate::vga_buffer::_print_retaining_colour($fg, $bg, format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println_w_colour {
+    ($fg: expr, $bg: expr, $($arg:tt)*) => ($crate::print_w_colour!($fg, $bg, "{}\n", format_args!($($arg)*)));
 }
 
 pub fn set_terminal_colour(foreground: Paint, background: Paint) {
@@ -185,6 +195,16 @@ lazy_static! {
 pub fn _print(args: fmt::Arguments){
     use core::fmt::Write;
     WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[doc(hidden)]
+pub fn _print_retaining_colour(fg: Paint, bg: Paint, args: fmt::Arguments){
+    let mut writer = WRITER.lock();
+    let orig_colour = writer.colour;
+
+    writer.set_colour(fg, bg);
+    writer.write_fmt(args).unwrap();
+    writer.colour = orig_colour;
 }
 
 

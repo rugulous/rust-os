@@ -15,6 +15,18 @@ pub extern "C" fn _start() -> ! {
     println!("Hello World!");
     os::init();
 
+    x86_64::instructions::interrupts::int3();
+
+    println!("Hmm that was weird");
+
+    #[allow(unconditional_recursion)]
+fn stack_overflow(){
+    stack_overflow();
+    volatile::Volatile::new(0).read();
+}
+
+stack_overflow();
+
     #[cfg(test)]
     test_main();
 
@@ -28,7 +40,9 @@ pub extern "C" fn _start() -> ! {
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("{}", info);
+    use os::println_w_colour;
+
+    println_w_colour!(Paint::White, Paint::Red, "{}", info);
     loop {}
 }
 
